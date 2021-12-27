@@ -17,6 +17,7 @@
 var running = true;
 var prevAxis = 0;
 var fps = 0;
+var fps_pre = 2;
 
 // Referenz auf Bereich, in den gezeichnet wird
 var canvas;
@@ -315,7 +316,10 @@ function displayScene(){
     
     // jetzt werden die Arrays mit der entsprechenden Zeichenfunktion mit Daten gefüllt
     drawCube();
+
     
+  
+
     // es wird festgelegt, ob eine Beleuchtungsrechnung für das Objekt durchgeführt wird oder nicht
     var lighting = true; // Beleuchtungsrechnung wird durchgeführt
     
@@ -377,6 +381,52 @@ function displayScene(){
 
 } // Ende der Funktion displayScene()
 
+function  drawObject(
+    shape,
+    lighting,
+    color, 
+    translation,
+    ownRotation = [0,1,0,0],
+    staticRotation = [0,1,0,0],
+    scale = [1,1,1],
+    doCartoon = false,
+    textureBlend = 0
+) {
+
+    numVertices = 0;
+	pointsArray.length=0;
+	colorsArray.length=0;
+	normalsArray.length=0;
+    
+
+
+    if(doCartoon){
+        cartoonLight = .7;
+        cartoonDark = .4;
+    }
+    else{
+        cartoonDark = -1;
+        cartoonLight = -1;
+    }
+    
+    // jetzt werden die Arrays mit der entsprechenden Zeichenfunktion mit Daten gefüllt
+    switch(shape){
+        case"cube":
+            drawCube(color);
+            break;
+      //  case"pyramid":
+      //      drawPyramid(color);
+      //      break
+     //   case"teapot":
+     //       drawTeapot();
+     //       break;
+        default:
+            console.log("unkown shape "+shape);
+    }
+    
+}
+
+
 
 //
 // hier wird eine namenslose Funktion definiert, die durch die Variable render zugegriffen werden kann.
@@ -385,14 +435,20 @@ function displayScene(){
 
 var render = function(){
     
+    
+
     counter += 1;
     
-    // TODO: Berechnung aktuelle FPS
-    //fps = then / counter;
-
-    document.getElementById("fps").innerHTML = fps;
-
-    // den Framebuffer (hier wird das Bild hineingeschrieben) und den z-Buffer (wird für Verdeckungsrechnung benötigt)
+    fps = counter/fps_pre;
+    //console.log(fps);
+    
+    if(Date.now() - then >= fps_pre*1000){
+        document.getElementById("fps").innerHTML = fps;
+        counter =0;
+        then=Date.now();
+    }
+    
+    // den Framebuffer (hier wird das Bild hineingeschrieben) und den z-Buffer (wird für Verdeckungsrechnung    benötigt)
     // initialisieren.
     gl.clear( gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
     
