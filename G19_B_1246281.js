@@ -316,7 +316,7 @@ function displayScene(){
     
     // jetzt werden die Arrays mit der entsprechenden Zeichenfunktion mit Daten gefüllt
     drawCube();
-
+    
     
   
 
@@ -348,9 +348,13 @@ function displayScene(){
     // d.h. die Model-Matrix muss errechnet werden. Dazu werden wieder Hilfsfunktionen
     // für die Matrizenrechnung aus dem externen Javascript MV.js verwendet
    
+   // model für den ersten Würfel
    // Initialisierung mit der Einheitsmatrix 
-	 model = mat4();    
+    model = mat4();    
    
+   // verschiebung
+   model = mult(model, translate(5, 0, 1));
+
    // Das Objekt wird am Ende noch um die x-Achse rotiert 
    model = mult(model, rotate(theta[0], [1, 0, 0] ));
     
@@ -360,8 +364,66 @@ function displayScene(){
    // Als erstes wird das Objekt um die z-Achse rotiert 
    model = mult(model, rotate(theta[2], [0, 0, 1] ));
 	
+   
+
    // die Model-Matrix ist fertig berechnet und wird an die Shader übergeben 
  	 gl.uniformMatrix4fv( gl.getUniformLocation(program, "modelMatrix"), false, flatten(model) );
+    
+   // jetzt wird noch die Matrix errechnet, welche die Normalen transformiert
+   normalMat = mat4();
+   normalMat = mult( view, model );
+   normalMat = inverse( normalMat );
+   normalMat = transpose( normalMat );
+    
+   // die Normal-Matrix ist fertig berechnet und wird an die Shader übergeben 
+ 	 gl.uniformMatrix4fv( gl.getUniformLocation(program, "normalMatrix"), false, flatten(normalMat) );
+
+   // schließlich wird alles gezeichnet. Dabei wird der Vertex-Shader numVertices mal aufgerufen
+   // und dabei die jeweiligen attribute - Variablen für jeden einzelnen Vertex gesetzt
+   // außerdem wird OpenGL mitgeteilt, dass immer drei Vertices zu einem Dreieck im Rasterisierungsschritt
+   // zusammengesetzt werden sollen
+   gl.drawArrays( gl.TRIANGLES, 0, numVertices );
+
+   // zweites Objekt(Würfel)
+
+   numVertices = 0;
+   pointsArray.length=0;
+   colorsArray.length=0;
+   normalsArray.length=0;
+
+   drawCube();
+
+    var lighting = true; // Beleuchtungsrechnung wird durchgeführt
+    gl.uniform1i(gl.getUniformLocation(program, "lighting"),lighting);
+    
+    if (lighting) {
+	      var materialDiffuse = vec4( 1.0, 0.8, 0.0, 1.0);    
+        calculateLights( materialDiffuse );
+         
+    } else {
+        
+        // es gibt keine Beleuchtungsrechnung, die vordefinierten Farben wurden bereits
+        // in der Draw-Funktion übergeben
+        ;
+   
+    };
+    
+
+    model = mat4();    
+   
+   // verschiebung
+   model = mult(model, translate(5, 0, -3));
+
+   // Das Objekt wird am Ende noch um die x-Achse rotiert 
+   model = mult(model, rotate(theta[0], [1, 0, 0] ));
+    
+   // Zuvor wird das Objekt um die y-Achse rotiert
+   model = mult(model, rotate(theta[1], [0, 1, 0] ));
+    
+   // Als erstes wird das Objekt um die z-Achse rotiert 
+   model = mult(model, rotate(theta[2], [0, 0, 1] ));
+	
+   gl.uniformMatrix4fv( gl.getUniformLocation(program, "modelMatrix"), false, flatten(model) );
     
    // jetzt wird noch die Matrix errechnet, welche die Normalen transformiert
    normalMat = mat4();
@@ -381,50 +443,7 @@ function displayScene(){
 
 } // Ende der Funktion displayScene()
 
-function  drawObject(
-    shape,
-    lighting,
-    color, 
-    translation,
-    ownRotation = [0,1,0,0],
-    staticRotation = [0,1,0,0],
-    scale = [1,1,1],
-    doCartoon = false,
-    textureBlend = 0
-) {
 
-    numVertices = 0;
-	pointsArray.length=0;
-	colorsArray.length=0;
-	normalsArray.length=0;
-    
-
-
-    if(doCartoon){
-        cartoonLight = .7;
-        cartoonDark = .4;
-    }
-    else{
-        cartoonDark = -1;
-        cartoonLight = -1;
-    }
-    
-    // jetzt werden die Arrays mit der entsprechenden Zeichenfunktion mit Daten gefüllt
-    switch(shape){
-        case"cube":
-            drawCube(color);
-            break;
-      //  case"pyramid":
-      //      drawPyramid(color);
-      //      break
-     //   case"teapot":
-     //       drawTeapot();
-     //       break;
-        default:
-            console.log("unkown shape "+shape);
-    }
-    
-}
 
 
 
