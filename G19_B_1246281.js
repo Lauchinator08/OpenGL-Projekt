@@ -90,6 +90,32 @@ var nBuffer;
 // Übergeben werden für Indices auf die vier Eckpunkte des Vierecks
 //
 
+
+
+function triangle(a, b, c) {
+    var t1 = subtract(vertices[b], vertices[a]);
+     var t2 = subtract(vertices[c], vertices[a]);
+     var normal = cross(t1, t2);
+     normal = vec3(normal);
+
+     pointsArray.push(vertices[a]); 
+     normalsArray.push(normal);
+	   colorsArray.push(colors[a]);
+    
+     pointsArray.push(vertices[b]); 
+     normalsArray.push(normal);
+	   colorsArray.push(colors[a]);
+    
+     pointsArray.push(vertices[c]); 
+     normalsArray.push(normal);
+	   colorsArray.push(colors[a]);
+
+       numVertices += 3;
+
+}
+
+
+
 function quad(a, b, c, d) {
 
      // zunächst wird die Normale des Vierecks berechnet. t1 ist der Vektor von Eckpunkt a zu Eckpunkt b
@@ -137,6 +163,53 @@ function quad(a, b, c, d) {
 //
 // Funktion, die einen Würfel zeichnet (Mittelpunkt liegt im Ursprung, Kantenlänge beträgt 1)
 //
+
+
+function drawPyramid() {
+    vertices = [
+        vec4(2.0, 0.0, 1.0, 1.0),
+        vec4(2.0, 0.0, -1.0, 1.0),
+        vec4(-2.0, 0.0, -1.0, 1.0),
+        vec4(-2.0, 0.0, 1.0, 1.0),
+        vec4(0.0, 4.0, 0.0, 1.0)
+    ]
+
+    colors = [
+        vec4(1.0, 0.0, 0.0, 1.0),
+        vec4(1.0, 1.0, 0.0, 1.0),
+        vec4(0.0, 1.0, 0.0, 1.0),
+        vec4(0.0, 1.0, 1.0, 1.0),
+        vec4(0.0, 0.0, 1.0, 1.0)
+    ]
+
+    quad(3, 2, 1, 0);
+    triangle(0, 1, 4);
+    triangle(1, 2, 4);
+    triangle(2, 3, 4);
+    triangle(3, 0, 4);
+
+    gl.bindBuffer(gl.ARRAY_BUFFER, nBuffer);
+    gl.bufferData(gl.ARRAY_BUFFER, flatten(normalsArray), gl.STATIC_DRAW);
+
+    var vNormal = gl.getAttribLocation(program, "vNormal");
+    gl.vertexAttribPointer(vNormal, 3, gl.FLOAT, false, 0, 0);
+    gl.enableVertexAttribArray(vNormal);
+
+    gl.bindBuffer(gl.ARRAY_BUFFER, vBuffer);
+    gl.bufferData(gl.ARRAY_BUFFER, flatten(pointsArray), gl.STATIC_DRAW);
+
+    var vPosition = gl.getAttribLocation(program, "vPosition");
+    gl.vertexAttribPointer(vPosition, 4, gl.FLOAT, false, 0, 0);
+    gl.enableVertexAttribArray(vPosition);
+
+    gl.bindBuffer(gl.ARRAY_BUFFER, cBuffer);
+    gl.bufferData(gl.ARRAY_BUFFER, flatten(colorsArray), gl.STATIC_DRAW);
+
+    var cPosition = gl.getAttribLocation(program, "vColor");
+    gl.vertexAttribPointer(cPosition, 4, gl.FLOAT, false, 0, 0);
+    gl.enableVertexAttribArray(cPosition);
+}
+
 
 function drawCube()
 {
@@ -397,13 +470,10 @@ function displayScene(){
     gl.uniform1i(gl.getUniformLocation(program, "lighting"),lighting);
     
     if (lighting) {
-	      var materialDiffuse = vec4( 1.0, 0.8, 0.0, 1.0);    
+	    var materialDiffuse = vec4( 0.0, 1.0, 0.0, 1.0);    
         calculateLights( materialDiffuse );
          
     } else {
-        
-        // es gibt keine Beleuchtungsrechnung, die vordefinierten Farben wurden bereits
-        // in der Draw-Funktion übergeben
         ;
    
     };
@@ -415,13 +485,16 @@ function displayScene(){
    model = mult(model, translate(5, 0, -3));
 
    // Das Objekt wird am Ende noch um die x-Achse rotiert 
-   model = mult(model, rotate(theta[0], [1, 0, 0] ));
+   model = mult(model, rotate(2*theta[0], [1, 0, 0] ));
     
    // Zuvor wird das Objekt um die y-Achse rotiert
-   model = mult(model, rotate(theta[1], [0, 1, 0] ));
+   model = mult(model, rotate(2*theta[1], [0, 1, 0] ));
     
    // Als erstes wird das Objekt um die z-Achse rotiert 
-   model = mult(model, rotate(theta[2], [0, 0, 1] ));
+   model = mult(model, rotate(2*theta[2], [0, 0, 1] ));
+
+   // Doppelte Größe
+   model = mult(model, scalem(2, 2, 2));
 	
    gl.uniformMatrix4fv( gl.getUniformLocation(program, "modelMatrix"), false, flatten(model) );
     
@@ -440,6 +513,125 @@ function displayScene(){
    // zusammengesetzt werden sollen
    gl.drawArrays( gl.TRIANGLES, 0, numVertices );
 
+    // erste Pyramide
+
+    numVertices = 0;
+    pointsArray.length = 0;
+    colorsArray.length = 0;
+    normalsArray.length = 0;
+
+    drawPyramid();
+
+    var lighting = true; // Beleuchtungsrechnung wird durchgeführt
+    gl.uniform1i(gl.getUniformLocation(program, "lighting"), lighting);
+
+    if (lighting) {
+        var materialDiffuse = vec4(1.0, 0.8, 0.0, 1.0);
+        var specularColor = vec4(1.0, 1.0, 1.0, 1.0);
+
+        calculateLights(materialDiffuse, specularColor);
+    }
+
+    // Transformationen
+    model = mat4();
+
+    model = mult(model, rotate(theta[0], [1, 0, 0]));
+    model = mult(model, rotate(theta[1], [0, 1, 0]));
+    model = mult(model, rotate(theta[2], [0, 0, 1]));
+
+    gl.uniformMatrix4fv(gl.getUniformLocation(program, "modelMatrix"), false, flatten(model));
+
+    // jetzt wird noch die Matrix errechnet, welche die Normalen transformiert
+    normalMat = mat4();
+    normalMat = mult(view, model);
+    normalMat = inverse(normalMat);
+    normalMat = transpose(normalMat);
+
+    gl.uniformMatrix4fv(gl.getUniformLocation(program, "normalMatrix"), false, flatten(normalMat));
+    gl.drawArrays(gl.TRIANGLES, 0, numVertices);
+
+    // zweite Pyramide
+
+    numVertices = 0;
+    pointsArray.length = 0;
+    colorsArray.length = 0;
+    normalsArray.length = 0;
+
+    drawPyramid();
+
+    var lighting = true; // Beleuchtungsrechnung wird durchgeführt
+    gl.uniform1i(gl.getUniformLocation(program, "lighting"), lighting);
+
+    if (lighting) {
+        var materialDiffuse = vec4(1.0, 0.0, 0.0, 1.0);
+        var specularColor = vec4(1.0, 1.0, 1.0, 1.0);
+
+        calculateLights(materialDiffuse, specularColor);
+
+    }
+
+    // Transformationen
+    model = mat4();
+
+    model = mult(model, rotate(theta[0], [1, 0, 0]));
+    model = mult(model, rotate(theta[1], [0, 1, 0]));
+    model = mult(model, rotate(theta[2], [0, 0, 1]));
+
+    model = mult(model, translate(0, 8, 0));
+    model = mult(model, rotate(180, [1, 0, 0]));
+
+    gl.uniformMatrix4fv(gl.getUniformLocation(program, "modelMatrix"), false, flatten(model));
+
+    // jetzt wird noch die Matrix errechnet, welche die Normalen transformiert
+    normalMat = mat4();
+    normalMat = mult(view, model);
+    normalMat = inverse(normalMat);
+    normalMat = transpose(normalMat);
+
+    gl.uniformMatrix4fv(gl.getUniformLocation(program, "normalMatrix"), false, flatten(normalMat));
+    gl.drawArrays(gl.TRIANGLES, 0, numVertices);
+
+    // Pyramide3
+
+    numVertices = 0;
+    pointsArray.length = 0;
+    colorsArray.length = 0;
+    normalsArray.length = 0;
+
+    drawPyramid();
+
+    var lighting = true;
+    gl.uniform1i(gl.getUniformLocation(program, "lighting"), lighting);
+
+    if (lighting) {
+        var materialDiffuse = vec4(0.0, 0.0, 1.0, 1.0);
+        var specularColor = vec4(1.0, 1.0, 1.0, 1.0);
+
+        calculateLights(materialDiffuse, specularColor);
+    }
+
+    // Transformationen
+    model = mat4();
+
+    model = mult(model, rotate(theta[0], [1, 0, 0]));
+    model = mult(model, rotate(theta[1], [0, 1, 0]));
+    model = mult(model, rotate(theta[2], [0, 0, 1]));
+
+    model = mult(model, translate(0, 6.4, 0.5));
+    model = mult(model, rotate(100, [1, 0, 0]));
+    model = mult(model, scalem(0.4, 0.4, 0.4));
+
+    gl.uniformMatrix4fv(gl.getUniformLocation(program, "modelMatrix"), false, flatten(model));
+
+    // jetzt wird noch die Matrix errechnet, welche die Normalen transformiert
+    normalMat = mat4();
+    normalMat = mult(view, model);
+    normalMat = inverse(normalMat);
+    normalMat = transpose(normalMat);
+
+    gl.uniformMatrix4fv(gl.getUniformLocation(program, "normalMatrix"), false, flatten(normalMat));
+
+    gl.drawArrays(gl.TRIANGLES, 0, numVertices);
 
 } // Ende der Funktion displayScene()
 
