@@ -295,12 +295,34 @@ function setCamera()
     // Vektor, der nach oben zeigt  
     var upv;
 	
-    if (camIndex == 0){
-        // hier wird die erste Kameraposition definiert
-		    eye = vec3(12.0,12.0,4.0);
-     		vrp = vec3(0.0,0.0,0.0);
-     		upv = vec3(0.0,1.0,0.0);
-	  };
+    switch (camIndex) {
+        case 0:
+            eye = vec3(12.0, 12.0, 4.0);
+            vrp = vec3(0.0, 0.0, 0.0);
+            upv = vec3(0.0, 1.0, 0.0);
+            break;
+        case 1:
+            eye = vec3(10.0, 0.0, 0.0);
+            vrp = vec3(0.0, 0.0, 0.0);
+            upv = vec3(0.0, 1.0, 0.0);
+            break;
+        case 2:
+            eye = vec3(0.0, 10.0, 0.0);
+            vrp = vec3(0.0, 0.0, 0.0);
+            upv = vec3(0.0, 0.0, 1.0);
+            break;
+        case 3:
+            eye = vec3(0.0, 0.0, 10.0);
+            vrp = vec3(0.0, 0.0, 0.0);
+            upv = vec3(0.0, 1.0, 0.0);
+            break;
+        case 4:
+            eye = vec3(12.0, 12.0, 4.0);
+            vrp = vec3(0.0, 4.0, 0.0);
+            upv = vec3(0.0, 1.0, 0.0);
+            break;
+        default: ;
+    }
 
     // hier wird die Viewmatrix unter Verwendung einer Hilfsfunktion berechnet,
     // die in einem externen Javascript (MV.js) definiert wird
