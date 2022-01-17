@@ -228,14 +228,14 @@ function drawCube()
 
     // hier werden verschiedene Farben definiert (je eine pro Eckpunkt)
     colors = [
-        vec4(1.0, 0.0, 0.0, 1.0), 
-	      vec4(1.0, 1.0, 0.0, 1.0),
-        vec4(0.0, 1.0, 0.0, 1.0),
-        vec4(0.0, 1.0, 1.0, 1.0),
-	      vec4(0.0, 0.0, 1.0, 1.0),
-	      vec4(1.0, 0.0, 1.0, 1.0),
         vec4(1.0, 0.0, 0.0, 1.0),
-	      vec4(1.0, 1.0, 0.0, 1.0)
+        vec4(1.0, 0.0, 0.0, 1.0),
+        vec4(1.0, 0.0, 0.0, 1.0),
+        vec4(0.0, 0.0, 0.0, 1.0),
+        vec4(1.0, 0.0, 0.0, 1.0),
+        vec4(1.0, 0.0, 0.0, 1.0),
+        vec4(0.0, 0.0, 0.0, 1.0),
+        vec4(0.0, 0.0, 0.0, 1.0)
     ];
 
     // und hier werden die Daten der 6 Seiten des Würfels in die globalen Arrays eingetragen
@@ -416,7 +416,7 @@ function displayScene(){
   
 
     // es wird festgelegt, ob eine Beleuchtungsrechnung für das Objekt durchgeführt wird oder nicht
-    var lighting = true; // Beleuchtungsrechnung wird durchgeführt
+    var lighting = false; // Beleuchtungsrechnung wird durchgeführt
     
     // die Information über die Beleuchtungsrechnung wird an die Shader weitergegeben
     gl.uniform1i(gl.getUniformLocation(program, "lighting"),lighting);
