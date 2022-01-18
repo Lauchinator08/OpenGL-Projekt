@@ -354,29 +354,41 @@ function setCamera()
 
 function calculateLights( materialDiffuse )
 {
-    // zunächst werden die Lichtquellen spezifiziert (bei uns gibt es eine Punktlichtquelle)
+     // zunächst werden die Lichtquellen spezifiziert (bei uns gibt es eine Punktlichtquelle)
     
     // die Position der Lichtquelle (in Weltkoordinaten)
     var lightPosition = vec4(7.0, 7.0, 0.0, 1.0 );
+
+	// die Farbe des AmbientLights
+	var ambientLight = scale(ambientIntensity ,vec4(1,1,1,1));
     
     // die Farbe der Lichtquelle im diffusen Licht
-    var lightDiffuse = vec4( 1.0, 1.0, 1.0, 1.0 );
+    var diffuseLight = vec4( 1.0, 1.0, 1.0, 1.0 );
 
-    
     // dann wird schon ein Teil der Beleuchtungsrechnung ausgeführt - das könnte man auch im Shader machen
     // aber dort würde diese Rechnung für jeden Eckpunkt (unnötigerweise) wiederholt werden. Hier rechnen wir
-    // das Produkt aus lightDiffuse und materialDiffuse einmal aus und übergeben das Resultat. Zur Multiplikation
+    // das Produkt aus diffuseLight und materialDiffuse einmal aus und übergeben das Resultat. Zur Multiplikation
     // der beiden Vektoren nutzen wir die Funktion mult aus einem externen Javascript (MV.js)
-    var diffuseProduct = mult(lightDiffuse, materialDiffuse);
-        
-    // die Werte für die Beleuchtungsrechnung werden an die Shader übergeben
+    
+    var diffuseProduct = mult(diffuseLight, material.materialDiffuseColor);
 
+	var ambientProduct = scale( material.materialAmbientIntensity, ambientLight);
+
+	var specularProduct = mult(diffuseLight, material.materialSpecularColor);
+
+	// die Werte für die Beleuchtungsrechnung werden an die Shader übergeben
+    
     // Übergabe der Position der Lichtquelle
     // flatten ist eine Hilfsfunktion, welche die Daten aus dem Javascript - Objekt herauslöst
     gl.uniform4fv(gl.getUniformLocation(program, "lightPosition"), flatten(lightPosition) );
-
+    // Übergabe des ambientProduct
+	gl.uniform4fv(gl.getUniformLocation(program, "ambientProduct"), flatten(ambientProduct));
+	// Übergabe des specularProduct
+	gl.uniform4fv(gl.getUniformLocation(program, "specularProduct"), flatten(specularProduct));
+	// Übergabe der shininess
+    gl.uniform1f(gl.getUniformLocation(program, "shininess"), material.materialShininess);
     // Übergabe des diffuseProduct
-     gl.uniform4fv(gl.getUniformLocation(program, "diffuseProduct"), flatten(diffuseProduct) );
+    gl.uniform4fv(gl.getUniformLocation(program, "diffuseProduct"), flatten(diffuseProduct) );
        
 }
 
@@ -407,16 +419,12 @@ function displayScene(){
 	  pointsArray.length=0;
 	  colorsArray.length=0;
 	  normalsArray.length=0;
-    
-    
+
     // jetzt werden die Arrays mit der entsprechenden Zeichenfunktion mit Daten gefüllt
     drawCube();
-    
-    
-  
 
     // es wird festgelegt, ob eine Beleuchtungsrechnung für das Objekt durchgeführt wird oder nicht
-    var lighting = false; // Beleuchtungsrechnung wird durchgeführt
+    var lighting = true; // Beleuchtungsrechnung wird durchgeführt
     
     // die Information über die Beleuchtungsrechnung wird an die Shader weitergegeben
     gl.uniform1i(gl.getUniformLocation(program, "lighting"),lighting);
@@ -426,9 +434,16 @@ function displayScene(){
         
         // die Materialfarbe für diffuse Reflektion wird spezifiziert
 	      var materialDiffuse = vec4( 1.0, 0.8, 0.0, 1.0);
-    
+        
+          var material = {
+            materialDiffuseColor: vec4( 1.0, 0.8, 0.0, 1.0),
+            materialSpecularColor: vec4( 1.0, 0.8, 0.0, 1.0),
+            materialAmbientIntensity: 0.5,
+            materialShininess: 100.0
+        };
+
         // die Beleuchtung wird durchgeführt und das Ergebnis an den Shader übergeben
-        calculateLights( materialDiffuse );
+        calculateLights( material );
          
     } else {
         
