@@ -80,8 +80,8 @@ var vBuffer;
 var nBuffer;
 
 /*** Hilfsfunktionen zum Zeichnen von Objekten */
-
-
+var ambientIntensity = 0.0;
+var shininess = 100;
 //
 // Funktion, die ein Quadrat in das pointsArray, colorsArray und normalsArray einträgt
 // Das Quadrat wird dabei in zwei Dreiecke trianguliert, da OpenGL keine Vierecke 
@@ -89,8 +89,16 @@ var nBuffer;
 //
 // Übergeben werden für Indices auf die vier Eckpunkte des Vierecks
 //
-
-
+// Variablen für die Drehung des Würfels
+var axis = 0;
+var theta = [0, 0, 0];
+var cubeZ = 0.0;
+var isRotating = false;
+// Teekanne
+var teapotNormalData = [];
+var teapotVertexData = [];
+var teapotIndexData = [];
+var teapotVertexIndexBuffer;
 
 function triangle(a, b, c) {
     var t1 = subtract(vertices[b], vertices[a]);
@@ -352,52 +360,506 @@ function setCamera()
 // der Parameter materialDiffuse ist ein vec4 und gibt die Materialfarbe für die diffuse Reflektion an
 //
 
-function calculateLights( materialDiffuse )
-{
-     // zunächst werden die Lichtquellen spezifiziert (bei uns gibt es eine Punktlichtquelle)
-    
-    // die Position der Lichtquelle (in Weltkoordinaten)
-    var lightPosition = vec4(7.0, 7.0, 0.0, 1.0 );
+function calculateLights(materialDiffuse, specularColor) {
+    // zunächst werden die Lichtquellen spezifiziert (bei uns gibt es eine Punktlichtquelle)
 
-	// die Farbe des AmbientLights
-	var ambientLight = scale(ambientIntensity ,vec4(1,1,1,1));
-    
+    // die Position der Lichtquelle (in Weltkoordinaten)
+    var lightPosition = vec4(7.0, 7.0, 3.5, 1.0);
     // die Farbe der Lichtquelle im diffusen Licht
-    var diffuseLight = vec4( 1.0, 1.0, 1.0, 1.0 );
+    var lightDiffuse = vec4(1.0, 1.0, 1.0, 1.0);
 
     // dann wird schon ein Teil der Beleuchtungsrechnung ausgeführt - das könnte man auch im Shader machen
     // aber dort würde diese Rechnung für jeden Eckpunkt (unnötigerweise) wiederholt werden. Hier rechnen wir
-    // das Produkt aus diffuseLight und materialDiffuse einmal aus und übergeben das Resultat. Zur Multiplikation
+    // das Produkt aus lightDiffuse und materialDiffuse einmal aus und übergeben das Resultat. Zur Multiplikation
     // der beiden Vektoren nutzen wir die Funktion mult aus einem externen Javascript (MV.js)
-    
-    var diffuseProduct = mult(diffuseLight, material.materialDiffuseColor);
+    var diffuseProduct = mult(lightDiffuse, materialDiffuse);
 
-	var ambientProduct = scale( material.materialAmbientIntensity, ambientLight);
+    //var ambientProduct = mult(scale(ambientIntensity, lightDiffuse), materialDiffuse);
+    var ambientProduct = scale(ambientIntensity, lightDiffuse);
 
-	var specularProduct = mult(diffuseLight, material.materialSpecularColor);
+    // SpecularColor
+    var specularProduct = mult(lightDiffuse, specularColor);
+    // die Werte für die Beleuchtungsrechnung werden an die Shader übergeben
 
-	// die Werte für die Beleuchtungsrechnung werden an die Shader übergeben
-    
     // Übergabe der Position der Lichtquelle
     // flatten ist eine Hilfsfunktion, welche die Daten aus dem Javascript - Objekt herauslöst
-    gl.uniform4fv(gl.getUniformLocation(program, "lightPosition"), flatten(lightPosition) );
-    // Übergabe des ambientProduct
-	gl.uniform4fv(gl.getUniformLocation(program, "ambientProduct"), flatten(ambientProduct));
-	// Übergabe des specularProduct
-	gl.uniform4fv(gl.getUniformLocation(program, "specularProduct"), flatten(specularProduct));
-	// Übergabe der shininess
-    gl.uniform1f(gl.getUniformLocation(program, "shininess"), material.materialShininess);
-    // Übergabe des diffuseProduct
-    gl.uniform4fv(gl.getUniformLocation(program, "diffuseProduct"), flatten(diffuseProduct) );
-       
+    gl.uniform4fv(gl.getUniformLocation(program, "lightPosition"), flatten(lightPosition));
+
+    // Übergabe des diffuseProduct, ambientProduct, specualrProduct und shininess
+    gl.uniform4fv(gl.getUniformLocation(program, "diffuseProduct"), flatten(diffuseProduct));
+    gl.uniform4fv(gl.getUniformLocation(program, "ambientProduct"), flatten(ambientProduct));
+    gl.uniform4fv(gl.getUniformLocation(program, "specularProduct"), flatten(specularProduct));
+    gl.uniform1f(gl.getUniformLocation(program, "shininess"), shininess);
+
+    /*if (hasTexture) {
+        drawTexture(2);
+    }
+    gl.uniform1i(gl.getUniformLocation(program, "hasTexture"), hasTexture);
+   * /
+    /**GL 4
+     * 
+     * e) Umso kleiner die Shininesss, desto stärker wird die specularColor
+     * 
+     * f) Die Objekte sind deutlich weißer
+     * 
+     */
+
 }
+function displayCube() {
+    //
+    // Zeichnen des ersten Objekts (Würfel)
+
+    // zunächst werden die Daten für die globalen Arrays gelöscht
+    // dies ist auch schon beim ersten Objekt zu tun, denn aus den
+    // Berechnungen eines früheren Frames könnten hier schon Werte in den Arrays stehen
+    // auch die Anzahl der Eckpunkte des zu zeichnenden Objekts wird auf 0 zurückgesetzt
+
+    numVertices = 0;
+    pointsArray.length = 0;
+    colorsArray.length = 0;
+    normalsArray.length = 0;
+
+    // jetzt werden die Arrays mit der entsprechenden Zeichenfunktion mit Daten gefüllt
+    drawCube();
+
+    // es wird festgelegt, ob eine Beleuchtungsrechnung für das Objekt durchgeführt wird oder nicht
+    var lighting = false; // Beleuchtungsrechnung wird NICHT durchgeführt
+
+    // die Information über die Beleuchtungsrechnung wird an die Shader weitergegeben
+    gl.uniform1i(gl.getUniformLocation(program, "lighting"), lighting);
+
+    if (lighting) {
+        // es soll also eine Beleuchtungsrechnung durchgeführt werden
+
+        // die Materialfarbe für diffuse Reflektion wird spezifiziert
+        var materialDiffuse = vec4(1.0, 0.8, 0.0, 1.0);
+        // die Beleuchtung wird durchgeführt und das Ergebnis an den Shader übergeben
+        calculateLights(materialDiffuse);
+
+    } else {
+
+        // es gibt keine Beleuchtungsrechnung, die vordefinierten Farben wurden bereits
+        // in der Draw-Funktion übergeben
+        ;
+
+    };
+
+
+    // es muss noch festgelegt werden, wo das Objekt sich in Weltkoordinaten befindet,
+    // d.h. die Model-Matrix muss errechnet werden. Dazu werden wieder Hilfsfunktionen
+    // für die Matrizenrechnung aus dem externen Javascript MV.js verwendet
+
+    // Initialisierung mit der Einheitsmatrix 
+    model = mat4();
+
+    // Das Objekt wird am Ende noch um die x-Achse rotiert 
+    model = mult(model, rotate(theta[0], [1, 0, 0]));
+
+    // Zuvor wird das Objekt um die y-Achse rotiert
+    model = mult(model, rotate(theta[1], [0, 1, 0]));
+
+    // Als erstes wird das Objekt um die z-Achse rotiert 
+    model = mult(model, rotate(theta[2], [0, 0, 1]));
+
+    // Translation aus dem Ursprung
+    model = mult(model, translate(5, 0, 1));
+
+    // Rotation um eigene z-Achse
+    model = mult(model, rotate(cubeZ, [0, 0, 1]));
+
+    // die Model-Matrix ist fertig berechnet und wird an die Shader übergeben 
+    gl.uniformMatrix4fv(gl.getUniformLocation(program, "modelMatrix"), false, flatten(model));
+
+    // jetzt wird noch die Matrix errechnet, welche die Normalen transformiert
+    normalMat = mat4();
+    normalMat = mult(view, model);
+    normalMat = inverse(normalMat);
+    normalMat = transpose(normalMat);
+
+    // die Normal-Matrix ist fertig berechnet und wird an die Shader übergeben 
+    gl.uniformMatrix4fv(gl.getUniformLocation(program, "normalMatrix"), false, flatten(normalMat));
+
+    // schließlich wird alles gezeichnet. Dabei wird der Vertex-Shader numVertices mal aufgerufen
+    // und dabei die jeweiligen attribute - Variablen für jeden einzelnen Vertex gesetzt
+    // außerdem wird OpenGL mitgeteilt, dass immer drei Vertices zu einem Dreieck im Rasterisierungsschritt
+    // zusammengesetzt werden sollen
+    gl.drawArrays(gl.TRIANGLES, 0, numVertices);
+}
+
+function displayCube2() {
+    numVertices = 0;
+    pointsArray.length = 0;
+    colorsArray.length = 0;
+    normalsArray.length = 0;
+
+    drawCube();
+
+    var lighting = true; // Beleuchtungsrechnung wird durchgeführt
+    gl.uniform1i(gl.getUniformLocation(program, "lighting"), lighting);
+
+    if (lighting) {
+        var materialDiffuse = vec4(0.0, 1.0, 0.0, 1.0);
+        var specularColor = vec4(1.0, 1.0, 1.0, 1.0);
+
+        calculateLights(materialDiffuse, specularColor, true);
+
+    }
+
+    // Transformationen
+    model = mat4();
+
+    model = mult(model, rotate(theta[0], [1, 0, 0]));
+    model = mult(model, rotate(theta[1], [0, 1, 0]));
+    model = mult(model, rotate(theta[2], [0, 0, 1]));
+
+    model = mult(model, translate(5, 0, -3));
+    model = mult(model, rotate(cubeZ * 2, [1, 0, 0]));
+    model = mult(model, scalem(2, 2, 2));
+
+    gl.uniformMatrix4fv(gl.getUniformLocation(program, "modelMatrix"), false, flatten(model));
+
+    // jetzt wird noch die Matrix errechnet, welche die Normalen transformiert
+    normalMat = mat4();
+    normalMat = mult(view, model);
+    normalMat = inverse(normalMat);
+    normalMat = transpose(normalMat);
+
+    gl.uniformMatrix4fv(gl.getUniformLocation(program, "normalMatrix"), false, flatten(normalMat));
+    gl.drawArrays(gl.TRIANGLES, 0, numVertices);
+}
+
+function displayPyramid() {
+    numVertices = 0;
+    pointsArray.length = 0;
+    colorsArray.length = 0;
+    normalsArray.length = 0;
+
+    drawPyramid();
+
+    var lighting = true; // Beleuchtungsrechnung wird durchgeführt
+    gl.uniform1i(gl.getUniformLocation(program, "lighting"), lighting);
+
+    if (lighting) {
+        var materialDiffuse = vec4(1.0, 0.8, 0.0, 1.0);
+        var specularColor = vec4(1.0, 1.0, 1.0, 1.0);
+
+        calculateLights(materialDiffuse, specularColor);
+    }
+
+    // Transformationen
+    model = mat4();
+
+    model = mult(model, rotate(theta[0], [1, 0, 0]));
+    model = mult(model, rotate(theta[1], [0, 1, 0]));
+    model = mult(model, rotate(theta[2], [0, 0, 1]));
+
+    gl.uniformMatrix4fv(gl.getUniformLocation(program, "modelMatrix"), false, flatten(model));
+
+    // jetzt wird noch die Matrix errechnet, welche die Normalen transformiert
+    normalMat = mat4();
+    normalMat = mult(view, model);
+    normalMat = inverse(normalMat);
+    normalMat = transpose(normalMat);
+
+    gl.uniformMatrix4fv(gl.getUniformLocation(program, "normalMatrix"), false, flatten(normalMat));
+    gl.drawArrays(gl.TRIANGLES, 0, numVertices);
+}
+
+function displayPyramid2() {
+    numVertices = 0;
+    pointsArray.length = 0;
+    colorsArray.length = 0;
+    normalsArray.length = 0;
+
+    drawPyramid();
+
+    var lighting = true; // Beleuchtungsrechnung wird durchgeführt
+    gl.uniform1i(gl.getUniformLocation(program, "lighting"), lighting);
+
+    if (lighting) {
+        var materialDiffuse = vec4(1.0, 0.0, 0.0, 1.0);
+        var specularColor = vec4(1.0, 1.0, 1.0, 1.0);
+
+        calculateLights(materialDiffuse, specularColor);
+
+    }
+
+    // Transformationen
+    model = mat4();
+
+    model = mult(model, rotate(theta[0], [1, 0, 0]));
+    model = mult(model, rotate(theta[1], [0, 1, 0]));
+    model = mult(model, rotate(theta[2], [0, 0, 1]));
+
+    model = mult(model, translate(0, 8, 0));
+    model = mult(model, rotate(180, [1, 0, 0]));
+
+    gl.uniformMatrix4fv(gl.getUniformLocation(program, "modelMatrix"), false, flatten(model));
+
+    // jetzt wird noch die Matrix errechnet, welche die Normalen transformiert
+    normalMat = mat4();
+    normalMat = mult(view, model);
+    normalMat = inverse(normalMat);
+    normalMat = transpose(normalMat);
+
+    gl.uniformMatrix4fv(gl.getUniformLocation(program, "normalMatrix"), false, flatten(normalMat));
+    gl.drawArrays(gl.TRIANGLES, 0, numVertices);
+}
+
+function displayPyramid3() {
+    //
+    // Zeichnen des vierten Objekts (pyramide)
+
+    numVertices = 0;
+    pointsArray.length = 0;
+    colorsArray.length = 0;
+    normalsArray.length = 0;
+
+    drawPyramid();
+
+    var lighting = true;
+    gl.uniform1i(gl.getUniformLocation(program, "lighting"), lighting);
+
+    if (lighting) {
+        var materialDiffuse = vec4(0.0, 0.0, 1.0, 1.0);
+        var specularColor = vec4(1.0, 1.0, 1.0, 1.0);
+
+        calculateLights(materialDiffuse, specularColor);
+    }
+
+    // Transformationen
+    model = mat4();
+
+    model = mult(model, rotate(theta[0], [1, 0, 0]));
+    model = mult(model, rotate(theta[1], [0, 1, 0]));
+    model = mult(model, rotate(theta[2], [0, 0, 1]));
+
+    model = mult(model, translate(0, 6.4, 0.5));
+    model = mult(model, rotate(100, [1, 0, 0]));
+    model = mult(model, scalem(0.4, 0.4, 0.4));
+
+    gl.uniformMatrix4fv(gl.getUniformLocation(program, "modelMatrix"), false, flatten(model));
+
+    // jetzt wird noch die Matrix errechnet, welche die Normalen transformiert
+    normalMat = mat4();
+    normalMat = mult(view, model);
+    normalMat = inverse(normalMat);
+    normalMat = transpose(normalMat);
+
+    gl.uniformMatrix4fv(gl.getUniformLocation(program, "normalMatrix"), false, flatten(normalMat));
+
+    gl.drawArrays(gl.TRIANGLES, 0, numVertices);
+}
+/**
+ * 
+ * @param {number} i Faktor für die Skalierung der Textur
+ */
+ function drawTexture(i) {
+    var tcPosition = gl.getAttribLocation(program, "vTexCoord");
+    gl.bindBuffer(gl.ARRAY_BUFFER, tcBuffer);
+    gl.enableVertexAttribArray(tcPosition);
+    gl.vertexAttribPointer(tcPosition, 2, gl.FLOAT, false, 0, 0);
+    gl.bufferData(
+        gl.ARRAY_BUFFER,
+        new Float32Array([
+            0, 0,
+            0, i,
+            i, i,
+            0, 0,
+            i, i,
+            i, 0,
+            0, 0,
+            0, i,
+            i, i,
+            0, 0,
+            i, i,
+            i, 0,
+            0, 0,
+            0, i,
+            i, i,
+            0, 0,
+            i, i,
+            i, 0,
+            0, 0,
+            0, i,
+            i, i,
+            0, 0,
+            i, i,
+            i, 0,
+            0, 0,
+            0, i,
+            i, i,
+            0, 0,
+            i, i,
+            i, 0,
+            0, 0,
+            0, i,
+            i, i,
+            0, 0,
+            i, i,
+            i, 0
+        ]),
+        gl.STATIC_DRAW
+    );
+}
+
+function drawTeapot() {
+    var teapotVertexNormalBuffer = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, teapotVertexNormalBuffer);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(teapotNormalData), gl.STATIC_DRAW);
+    teapotVertexNormalBuffer.itemSize = 3;
+    teapotVertexNormalBuffer.numItems = teapotNormalData.length / 3;
+
+    var teapotVertexPositionBuffer = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, teapotVertexPositionBuffer);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(teapotVertexData), gl.STATIC_DRAW);
+    teapotVertexPositionBuffer.itemSize = 3;
+    teapotVertexPositionBuffer.numItems = teapotVertexData.length / 3;
+
+    teapotVertexIndexBuffer = gl.createBuffer();
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, teapotVertexIndexBuffer);
+    gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(teapotIndexData), gl.STATIC_DRAW);
+    teapotVertexIndexBuffer.itemSize = 1;
+    teapotVertexIndexBuffer.numItems = teapotIndexData.length;
+
+    gl.enableVertexAttribArray(gl.getAttribLocation(program, "vPosition"));
+    gl.enableVertexAttribArray(gl.getAttribLocation(program, "vNormal"));
+
+
+    gl.bindBuffer(gl.ARRAY_BUFFER, teapotVertexPositionBuffer);
+    gl.vertexAttribPointer(gl.getAttribLocation(program, "vPosition"), teapotVertexPositionBuffer.itemSize, gl.FLOAT, false, 0, 0);
+
+    gl.bindBuffer(gl.ARRAY_BUFFER, teapotVertexNormalBuffer);
+    gl.vertexAttribPointer(gl.getAttribLocation(program, "vNormal"), teapotVertexNormalBuffer.itemSize, gl.FLOAT, false, 0, 0);
+
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, teapotVertexIndexBuffer);
+
+    gl.disableVertexAttribArray(gl.getAttribLocation(program, "vColor"));
+    gl.disableVertexAttribArray(gl.getAttribLocation(program, "vTexCoord"));
+}
+function displayTeapot() {
+    numVertices = 0;
+    pointsArray.length = 0;
+    colorsArray.length = 0;
+    normalsArray.length = 0;
+
+    gl.uniform1i(gl.getUniformLocation(program, "cartoonObj"), true);
+
+    drawTeapot();
+
+    var lighting = true;
+    gl.uniform1i(gl.getUniformLocation(program, "lighting"), lighting);
+
+    if (lighting) {
+
+        var materialDiffuse = vec4(0.0, 0.0, 1.0, 1.0);
+        var specularColor = vec4(1.0, 1.0, 1.0, 1.0);
+
+        calculateLights(materialDiffuse, specularColor);
+
+    }
+
+    //Transformationen
+    model = mat4();
+
+    model = mult(model, rotate(theta[0], [1, 0, 0]));
+    model = mult(model, rotate(theta[1], [0, 1, 0]));
+    model = mult(model, rotate(theta[2], [0, 0, 1]));
+
+    model = mult(model, translate(-5, 0, 6));
+    model = mult(model, rotate(cubeZ, [0, 1, 0]));
+    model = mult(model, scalem(0.3, 0.3, 0.3));
+
+    gl.uniformMatrix4fv(gl.getUniformLocation(program, "modelMatrix"), false, flatten(model));
+
+    normalMat = mat4();
+    normalMat = mult(view, model);
+    normalMat = inverse(normalMat);
+    normalMat = transpose(normalMat);
+
+    gl.uniformMatrix4fv( gl.getUniformLocation(program, "normalMatrix"), false, flatten(normalMat) );
+
+    gl.drawElements(gl.TRIANGLES, teapotVertexIndexBuffer.numItems, gl.UNSIGNED_SHORT, 0);
+    gl.uniform1i(gl.getUniformLocation(program, "cartoonObj"), false);
+}
+
+function displayScene() {
+
+
+    //
+    // Die Kamera für das Bild wird gesetzt
+
+    // View-Matrix und Projection-Matrix zur Kamera berechnen
+    setCamera();
+
+    displayCube();
+    displayCube2();
+    displayPyramid();
+    displayPyramid2();
+    displayPyramid3();
+    displayTeapot();
+} 
+
+function loadTexture() {
+    var texture = gl.createTexture();
+    var image = document.getElementById("texImage");
+    //init
+    gl.bindTexture(gl.TEXTURE_2D, texture);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, image);
+    gl.generateMipmap(gl.TEXTURE_2D);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST_MIPMAP_LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+}
+
+function loadTeapot() {
+    var request = new XMLHttpRequest();
+
+    request.open("GET", "Teapot.json");
+
+    request.overrideMimeType("application/json");
+
+    request.onreadystatechange = function () {
+
+        if (request.readyState == 4) {
+
+            var teapotData = JSON.parse(request.responseText);
+
+            var i = 0;
+
+            while (i < teapotData.vertexNormals.length) {
+                teapotNormalData.push(teapotData.vertexNormals[i]);
+                i++;
+            }
+
+            i = 0;
+
+            while (i < teapotData.vertexPositions.length) {
+                teapotVertexData.push(teapotData.vertexPositions[i]);
+                i++;
+            }
+
+            i = 0;
+
+            while (i < teapotData.indices.length) {
+                teapotIndexData.push(teapotData.indices[i]);
+                i++;
+            }
+        }
+    }
+    request.send();
+}
+
+
+
+
+
 
 
 //
 // Die Funktion setzt die Szene zusammen, dort wird ein Objekt nach dem anderen gezeichnet
 // 
 
-function displayScene(){
+/*function displayScene(){
 
     
     //
@@ -434,16 +896,12 @@ function displayScene(){
         
         // die Materialfarbe für diffuse Reflektion wird spezifiziert
 	      var materialDiffuse = vec4( 1.0, 0.8, 0.0, 1.0);
-        
-          var material = {
-            materialDiffuseColor: vec4( 1.0, 0.8, 0.0, 1.0),
-            materialSpecularColor: vec4( 1.0, 0.8, 0.0, 1.0),
-            materialAmbientIntensity: 0.5,
-            materialShininess: 100.0
-        };
+
+         
+          
 
         // die Beleuchtung wird durchgeführt und das Ergebnis an den Shader übergeben
-        calculateLights( material );
+        calculateLights( materialDiffuse );
          
     } else {
         
@@ -462,18 +920,20 @@ function displayScene(){
    // Initialisierung mit der Einheitsmatrix 
     model = mat4();    
    
-   // verschiebung
-   model = mult(model, translate(5, 0, 1));
+     // Das Objekt wird am Ende noch um die x-Achse rotiert 
+     model = mult(model, rotate(theta[0], [1, 0, 0]));
 
-   // Das Objekt wird am Ende noch um die x-Achse rotiert 
-   model = mult(model, rotate(theta[0], [1, 0, 0] ));
-    
-   // Zuvor wird das Objekt um die y-Achse rotiert
-   model = mult(model, rotate(theta[1], [0, 1, 0] ));
-    
-   // Als erstes wird das Objekt um die z-Achse rotiert 
-   model = mult(model, rotate(theta[2], [0, 0, 1] ));
-	
+     // Zuvor wird das Objekt um die y-Achse rotiert
+     model = mult(model, rotate(theta[1], [0, 1, 0]));
+ 
+     // Als erstes wird das Objekt um die z-Achse rotiert 
+     model = mult(model, rotate(theta[2], [0, 0, 1]));
+ 
+     // Translation aus dem Ursprung
+     model = mult(model, translate(5, 0, 1));
+ 
+     // Rotation um eigene z-Achse
+     model = mult(model, rotate(cubeZ, [0, 0, 1]));
    
 
    // die Model-Matrix ist fertig berechnet und wird an die Shader übergeben 
@@ -654,9 +1114,8 @@ function displayScene(){
     model = mult(model, rotate(theta[1], [0, 1, 0]));
     model = mult(model, rotate(theta[2], [0, 0, 1]));
 
-    model = mult(model, translate(0, 6.4, 0.5));
-    model = mult(model, rotate(100, [1, 0, 0]));
-    model = mult(model, scalem(0.4, 0.4, 0.4));
+    model = mult(model, translate(0, 8, 0));
+    model = mult(model, rotate(180, [1, 0, 0]));
 
     gl.uniformMatrix4fv(gl.getUniformLocation(program, "modelMatrix"), false, flatten(model));
 
@@ -679,8 +1138,19 @@ function displayScene(){
 //
 // hier wird eine namenslose Funktion definiert, die durch die Variable render zugegriffen werden kann.
 // diese Funktion wird für jeden Frame aufgerufen
-//
 
+
+
+
+
+
+/*** Funktionen zur Ausführung von WebGL  */
+
+
+//
+// Diese Funktion wird beim Laden der HTML-Seite ausgeführt. Sie ist so etwas wie die "main"-Funktion
+// Ziel ist es, WebGL zu initialisieren
+//
 var render = function(){
     
     
@@ -714,18 +1184,6 @@ var render = function(){
     
 
 }
-
-
-
-
-/*** Funktionen zur Ausführung von WebGL  */
-
-
-//
-// Diese Funktion wird beim Laden der HTML-Seite ausgeführt. Sie ist so etwas wie die "main"-Funktion
-// Ziel ist es, WebGL zu initialisieren
-//
-
 window.onload = function init() {
     
     // die Referenz auf die Canvas, d.h. den Teil des Browserfensters, in den WebGL zeichnet, 
@@ -741,6 +1199,8 @@ window.onload = function init() {
     // wie groß das Bild ist)
     gl.viewport( 0, 0, canvas.width, canvas.height );
   
+
+
     // die Hintergrundfarbe wird festgelegt
     gl.clearColor( 0.9, 0.9, 1.0, 1.0 );
     
@@ -753,6 +1213,8 @@ window.onload = function init() {
     
     // die über die Refenz "program" zugänglichen Shader werden aktiviert
     gl.useProgram( program );
+    loadTeapot();
+
 
 	// OpenGL Speicherobjekte anlegen
     vBuffer = gl.createBuffer();
